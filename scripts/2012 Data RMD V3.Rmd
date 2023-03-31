@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(ggplot2)
 source('Toolbox.R')
+print(getwd())
 ```
 
 ## Data Import
@@ -43,7 +44,7 @@ tb_import(c("UID", "SITE_ID", "VISIT_NO", "DATE_COL",
                  "SITETYPE", "SITESAMP", "DSGN12", "EVAL_NAME",
                  "STATE", "ELEVATION", "AREA_HA", "PERIM_KM",
                  "SIZE_CLASS", "FS_EW", "NA_L2CODE", "NA_L3CODE",
-                 "URBAN", "LAKE_ORIGIN"), "nla2012_wide_siteinfo_08232016.csv") -> siteinfo
+                 "URBAN", "LAKE_ORIGIN"), "./data/nla2012_wide_siteinfo_08232016.csv") -> siteinfo
 ```
 
 #### Watershed Data
@@ -58,7 +59,7 @@ tb_import(c("UID", "SITE_ID", "VISIT_NO", "DATE_COL",
 - TMEANPY_BSN (mean temperature in basin 12 months)[multiple temp values]
 
 ``` {r import_watershed}
-tb_import(c("SITE_ID", "DOMGEOL_BSN", "NLCD2006_ASSIGNEDAREA_BSN", "NLCD2006_DEVELOPEDPCT_BSN", "NLCD2006_FORESTPCT_BSN", "NLCD2006_IMPERVAREA_BSN", "PMEAN_BSN", "TMEANPY_BSN"), "nla2012_wide_watershed.csv") -> watershed
+tb_import(c("SITE_ID", "DOMGEOL_BSN", "NLCD2006_ASSIGNEDAREA_BSN", "NLCD2006_DEVELOPEDPCT_BSN", "NLCD2006_FORESTPCT_BSN", "NLCD2006_IMPERVAREA_BSN", "PMEAN_BSN", "TMEANPY_BSN"), "./data/nla2012_wide_watershed.csv") -> watershed
 ```
 
 #### Water Chemistry Data
@@ -69,7 +70,7 @@ tb_import(c("SITE_ID", "DOMGEOL_BSN", "NLCD2006_ASSIGNEDAREA_BSN", "NLCD2006_DEV
 - PH_RESULT
 
 ``` {r import_waterchem}
-tb_import(c("UID", "NTL_RESULT", "PTL_RESULT", "PH_RESULT"), "nla2012_waterchem_wide.csv") -> waterchem
+tb_import(c("UID", "NTL_RESULT", "PTL_RESULT", "PH_RESULT"), "./data/nla2012_waterchem_wide.csv") -> waterchem
 ```
 
 ## Data Merge and Initial Filter
