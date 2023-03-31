@@ -129,3 +129,9 @@ tb_boxplot_multi(watershed_filter_result, URBAN, PTL_RESULT)
 tb_histogram(watershed_filter_result, PTL_RESULT)
 tb_histogram_panel(watershed_filter_result, PTL_RESULT, URBAN)
 ```
+
+## PCA
+
+``` {r SVD}
+tb_SVD(watershed_filter_result, c("PTL_RESULT", "NTL_RESULT", "PH_RESULT"))
+```

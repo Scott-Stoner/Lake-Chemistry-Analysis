@@ -18,8 +18,8 @@ tb_import <- function(me_columns, me_filename){
   stopifnot(is.character(me_filename))
   
   read.csv(me_filename) %>%
-  dplyr::select(all_of(me_columns)) -> me_selection
-  invisible(me_selection)
+  dplyr::select(all_of(me_columns)) %>%
+  invisible()
 }
 
 # test code
@@ -121,4 +121,11 @@ tb_histogram_panel <- function(me_data, me_x, me_y) {
 }
 
 ## PCA
+
+tb_SVD <- function(me_data, me_columns) {
+  me_data %>%
+    dplyr::select(all_of(me_columns)) %>%
+    svd() %>%
+    return()
+}
 
