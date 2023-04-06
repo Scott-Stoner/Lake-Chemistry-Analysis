@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(ggplot2)
 source('Toolbox.R')
+library(randomForest)
 print(getwd())
 ```
 
@@ -128,4 +129,10 @@ tb_boxplot_multi(watershed_filter_result, URBAN, PTL_RESULT)
 ``` {r histogram}
 tb_histogram(watershed_filter_result, PTL_RESULT)
 tb_histogram_panel(watershed_filter_result, PTL_RESULT, URBAN)
+```
+
+## PCA
+
+``` {r SVD}
+svd_result <- tb_SVD(watershed_filter_result, c("PTL_RESULT", "NTL_RESULT", "PH_RESULT"))
 ```

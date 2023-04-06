@@ -1,6 +1,7 @@
 library(dplyr)
 library(ggplot2)
 library(MASS)
+library(randomForest)
 
 ### TOOLBOX
 
@@ -18,8 +19,8 @@ tb_import <- function(me_columns, me_filename){
   stopifnot(is.character(me_filename))
   
   read.csv(me_filename) %>%
-  dplyr::select(all_of(me_columns)) -> me_selection
-  invisible(me_selection)
+  dplyr::select(all_of(me_columns)) %>%
+  invisible()
 }
 
 # test code
@@ -122,3 +123,23 @@ tb_histogram_panel <- function(me_data, me_x, me_y) {
 
 ## PCA
 
+tb_SVD <- function(me_data, me_columns) {
+  me_data %>%
+    dplyr::select(all_of(me_columns)) %>%
+    svd() %>%
+    return()
+}
+
+## Random Forest
+
+tb_randomforest <- function(){}
+
+# test code
+print(getwd())  
+test_data <- tb_import(c("UID", "NTL_RESULT", "PTL_RESULT", "PH_RESULT"), "./scripts/data/nla2012_waterchem_wide.csv")
+set.seed(710)
+test_forest <- randomForest(PTL_RESULT~.,
+                            data = test_data,
+                            ntree = 100,
+                            mtry = 2)
+test_forest  
