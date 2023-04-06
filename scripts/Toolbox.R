@@ -1,6 +1,7 @@
 library(dplyr)
 library(ggplot2)
 library(MASS)
+library(randomForest)
 
 ### TOOLBOX
 
@@ -129,3 +130,16 @@ tb_SVD <- function(me_data, me_columns) {
     return()
 }
 
+## Random Forest
+
+tb_randomforest <- function(){}
+
+# test code
+print(getwd())  
+test_data <- tb_import(c("UID", "NTL_RESULT", "PTL_RESULT", "PH_RESULT"), "./scripts/data/nla2012_waterchem_wide.csv")
+set.seed(710)
+test_forest <- randomForest(PTL_RESULT~.,
+                            data = test_data,
+                            ntree = 100,
+                            mtry = 2)
+test_forest  
