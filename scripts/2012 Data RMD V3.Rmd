@@ -105,16 +105,6 @@ tb_histogram_panel <- function(me_data, me_x, me_y) {
     scale_x_binned() +
     facet_wrap(vars({{me_y}}))
 }
-
-## PCA
-
-tb_SVD <- function(me_data, me_columns) {
-  me_data %>%
-    dplyr::select(all_of(me_columns)) %>%
-    svd() %>%
-    return()
-}
-
 ```
 ## Data Import
 
@@ -184,6 +174,7 @@ tb_import(c("SITE_ID", "DOMGEOL_BSN", "NLCD2006_ASSIGNEDAREA_BSN", "NLCD2006_DEV
 - NTL_RESULT (Total Nitrogen mg/L)
 - PTL_RESULT (Total Phosphorus ug/L)
 - PH_RESULT
+- TURB_RESULT
 
 ``` {r import_waterchem}
 tb_import(c("UID", "NTL_RESULT", "PTL_RESULT", "PH_RESULT", "TURB_RESULT"), "./data/nla2012_waterchem_wide.csv") -> waterchem
@@ -208,7 +199,7 @@ tb_import(c("UID", "SAMPLE_ID", "VISIT_NO", "ABUNDANCE", "ALGAL_GROUP", "TAXA_ID
 
 #### Data Merge and Initial Filter
 
-The selected watershed and water chemistry data from the imported tables is now combined into a single table that will be used for lake selection. First a left join using the SITE_ID field to append watershed data to general site info. Then a left join is used to append the water chemistry data to each visit using the UID field. This table is then filtered to remove undesired lakes. First, lakes with no sampling data are excluded, followed by lakes that were not randomly selected, and third by visit number, removing duplicate visits.
+The selected watershed and water chemistry data from the imported tables is now combined into a single table that will be used for lake selection. A left join using the SITE_ID field to append watershed data to general site info. Then a left join is used to append the water chemistry data to each visit using the UID field. This table is then filtered to remove undesired lakes. First, lakes with no sampling data are excluded, followed by lakes that were not randomly selected, and third by visit number, removing duplicate visits.
 
 #### Lake Selection
 
@@ -247,7 +238,8 @@ phyto_count %>%
 phyto_filtered %>%
   dplyr::select("PTL_RESULT", "TAXA_ID", "ABUNDANCE") %>%
   dplyr::group_by(TAXA_ID) %>%
-  pivot_wider(names_from = TAXA_ID, values_from = ABUNDANCE, values_fn = sum) %>%
+  pivot_wider(names_from = TAXA_ID, values_from = ABUNDANCE, values_fn = sum, names_glue = "TID_{TAXA_ID}") %>%
+  log() %>%
   replace(is.na(.), 0) -> phyto_rf
 
 phyto_filtered %>%
@@ -268,14 +260,111 @@ watershed_filter_result %>%
   knitr::kable(format='simple', align='c', padding = 3, label = 'WATERSHED', digits = round(3))
 ```
 
+Here are two plots of phosphorus showing the relatively even distribution after log transformation. Phosphorus has been log transformed for all calculations. 
+
+``` {r phosphorus_summary}
+watershed_filter_result %>%
+  dplyr::select(PTL_RESULT) %>%
+  log %>%
+  tb_boxplot_single(PTL_RESULT)
+
+watershed_filter_result %>%
+  dplyr::select(PTL_RESULT) %>%
+  log %>%
+  tb_histogram(PTL_RESULT)
+```
+
+These are scatter plots showing nutrient relationships at various lakes in the data set. Nitrogen and Phosphorus are not obviously correlated and neither is pH. Log transformations help with comparisons between pH (already log transformed) and Phosphorus/Nitrogen.  
+
+``` {r water_quality_scatterplots}
+ggplot(watershed_filter_result, aes(x = log(NTL_RESULT), y = log(PTL_RESULT))) +
+  geom_point()
+
+ggplot(watershed_filter_result, aes(x = PH_RESULT, y = log(NTL_RESULT))) +
+  geom_point()
+
+ggplot(watershed_filter_result, aes(x = PH_RESULT, y = log(PTL_RESULT))) +
+  geom_point()
+```
+
+
 ## PCA
 
-``` {r PCA}
+First the SVD is calculated with prcomp() and a summary is produced for each principle component.
 
+``` {r PCA_1}
+phyto_rf[,-c(1)] %>%
+  prcomp() -> phyto_pca
+
+print(summary(phyto_pca))
 ```
+
+Then a scatter plot of PC 1 and PC 2 are created, the points colored based on phosphorus value. In this case there appears to be a slight separation in different directions based on phosphorus (V shape), with higher phosphorus related to higher PC 2 values.
+
+#### PC1 and PC2
+
+``` {r PCA_2}
+phyto_pca$x %>%
+  data.frame() %>%
+  ggplot(aes(x = PC1, y = PC2, color = phyto_rf$PTL_RESULT)) +
+  geom_point()
+```
+
+#### PCA Biplot
+
+To investigate this further, a biplot is created. From this it's possible to see that diatoms with Taxa_IDs 4075, 4849, and 4182 are potentially indicators of higher phosphorus levels. 
+
+``` {r PCA_3}
+biplot(phyto_pca, arrow.len=0, cex = c(0.5,0.75))
+```
+
+#### PCA Results Analysis
+
+What follows are a few plots of these selected diatom taxa that show a potential skew in the direction of higher phosphorus compared to the average distribution of phosphorus.
+
+``` {r PCA_analysis_4075}
+phyto_rf %>%
+  select(PTL_RESULT, TID_4075) %>%
+  filter(TID_4075 > 0) %>%
+  ggplot(aes(PTL_RESULT)) +
+    geom_boxplot()
+```
+
+``` {r PCA_analysis_4849}
+phyto_rf %>%
+  select(PTL_RESULT, TID_4849) %>%
+  filter(TID_4849 > 0) %>%
+  ggplot(aes(PTL_RESULT)) +
+    geom_boxplot()
+```
+
+``` {r PCA_analysis_4182}
+phyto_rf %>%
+  select(PTL_RESULT, TID_4182) %>%
+  filter(TID_4182 > 0) %>%
+  ggplot(aes(PTL_RESULT)) +
+    geom_boxplot()
+```
+
+Here is a boxplot for the diatom taxa with the largest biplot arrow that points away from the potential cluster of high phosphorus lakes mentioned earlier.
+
+``` {r PCA_analysis_4093}
+phyto_rf %>%
+  select(PTL_RESULT, TID_4093) %>%
+  filter(TID_4093 > 0) %>%
+  ggplot(aes(PTL_RESULT)) +
+    geom_boxplot()
+```
+
 
 ## Random Forest
 
-``` {r random_forest}
+The random forest uses bootstrapping to build a decision tree from which it creates a regression model to fit the data. The purpose of the bootstrapping is to reduce overfitting the data. So far this section only produces a negative % of variance explained. Compared to PCA this method has not shown similar levels of predictive power. Future potential in using PCA to pre-select diatom taxa to reduce noise.
 
+``` {r random_forest}
+set.seed(710)
+
+randomForest(PTL_RESULT~., data = phyto_rf, ntree = 1000, mtry = 3) -> rf_result
+
+rf_result
 ```
