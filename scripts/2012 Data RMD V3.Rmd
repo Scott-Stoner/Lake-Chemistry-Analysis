@@ -5,19 +5,120 @@ date: '2023'
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
+library(tidyr)
+library(readr)
 library(ggplot2)
-source('Toolbox.R')
 library(randomForest)
-print(getwd())
 ```
 
+``` {r toolbox, include = FALSE}
+### TOOLBOX
+
+# This section contains function definitions that are used to conduct later analysis.
+# Purpose of this section is to make previous versions of this code 'functional'.
+
+## Import Function
+
+#   This function takes arguments: string(a csv file name), a list of strings(column
+# names). It imports the desired file and returns the selected columns in a dataframe.
+
+tb_import <- function(me_columns, me_filename){
+  stopifnot(is.vector(me_columns))
+  stopifnot(is.character(me_filename))
+  
+  read.csv(me_filename) %>%
+  dplyr::select(all_of(me_columns)) %>%
+  invisible()
+}
+
+## Summary Stats
+
+# This function takes a dataframe and returns summary() data for each numeric col.
+
+tb_summary <- function(me_data){
+  me_data %>%
+    select_if(is.numeric) %>%
+    summary() %>%
+    return()
+}
+
+## Scatter Plot
+
+# These functions create scatter plots with specific alterations.
+
+# Basic Scatter Plot
+# takes a dataframe, x, and y column. 
+
+tb_scatter <- function(me_data, me_x, me_y) {
+  ggplot(me_data, aes(x = {{me_x}}, y = {{me_y}})) +
+    geom_point()
+}
+
+# Basic Scatter with Linear Regression line
+
+tb_scatter_linreg <- function(me_data, me_x, me_y) {
+  ggplot(me_data, aes(x = {{me_x}}, y = {{me_y}})) +
+    geom_point() +
+    geom_smooth(method='lm', se=FALSE)
+}
+
+# Scatter Plot with additional input for color column.
+
+tb_scatter_color <- function(me_data, me_x, me_y, me_color) {
+  ggplot(me_data, aes(x = {{me_x}}, y = {{me_y}}, color = {{me_color}})) +
+    geom_point()
+}
+
+## Box Plot
+
+# Creates a box plot for a single column
+
+tb_boxplot_single <- function(me_data, me_x) {
+  ggplot(me_data, aes({{me_x}})) +
+    geom_boxplot()
+}
+
+# creates multiple box plots based on (me_y) data on the y axis,
+# grouped by (me_x) on the x-axis
+
+tb_boxplot_multi <- function(me_data, me_x, me_y) {
+  ggplot(me_data, aes({{me_x}}, {{me_y}})) +
+    geom_boxplot()
+}
+
+## Histogram
+
+tb_histogram <- function(me_data, me_x) {
+  me_data %>%
+  ggplot() +
+    geom_bar(aes({{me_x}})) +
+    scale_x_binned()
+}
+
+tb_histogram_panel <- function(me_data, me_x, me_y) {
+  me_data %>%
+    ggplot() +
+    geom_bar(aes({{me_x}})) +
+    scale_x_binned() +
+    facet_wrap(vars({{me_y}}))
+}
+
+## PCA
+
+tb_SVD <- function(me_data, me_columns) {
+  me_data %>%
+    dplyr::select(all_of(me_columns)) %>%
+    svd() %>%
+    return()
+}
+
+```
 ## Data Import
 
-This section covers importing lake chemistry and watershed data for the purpose of lake selection. The relevant data is first retrieved from one of the NLS 2012 csv files. These variables fall into two categories, watershed and water chemistry. Additional variables are included to help with ID or shed light on connections made during PCA. Important to note that there are 2 ID systems in use, UIDs (unique sample event IDs) and Site IDs (lake specific IDs). Retaining both is important to select and summarize lakes with multiple sample events later in the process. Variable names and notes are included for each imported data set. \
-\
+This section covers importing lake chemistry and watershed data for the purpose of lake selection. The relevant data is first retrieved from one of the NLS 2012 csv files. These variables fall into three categories, watershed information, water chemistry data, and diatom phytoplankton counts. Additional variables are included to help with ID or shed light on connections made during anlaysis. Variable names and notes are included for each imported data set. 
 
 #### Site Info
 
@@ -41,11 +142,25 @@ This section covers importing lake chemistry and watershed data for the purpose 
 - UID (unique site visit id)
 
 ``` {r import_siteinfo}
-tb_import(c("UID", "SITE_ID", "VISIT_NO", "DATE_COL",
-                 "SITETYPE", "SITESAMP", "DSGN12", "EVAL_NAME",
-                 "STATE", "ELEVATION", "AREA_HA", "PERIM_KM",
-                 "SIZE_CLASS", "FS_EW", "NA_L2CODE", "NA_L3CODE",
-                 "URBAN", "LAKE_ORIGIN"), "./data/nla2012_wide_siteinfo_08232016.csv") -> siteinfo
+tb_import(c("UID", 
+            "SITE_ID", 
+            "VISIT_NO", 
+            "DATE_COL",
+            "SITETYPE", 
+            "SITESAMP", 
+            "DSGN12", 
+            "EVAL_NAME",
+            "STATE", 
+            "ELEVATION", 
+            "AREA_HA", 
+            "PERIM_KM",
+            "SIZE_CLASS", 
+            "FS_EW",
+            "NA_L2CODE", 
+            "NA_L3CODE",
+            "URBAN", 
+            "LAKE_ORIGIN"), 
+          "./data/nla2012_wide_siteinfo_08232016.csv") -> siteinfo
 ```
 
 #### Watershed Data
@@ -71,27 +186,33 @@ tb_import(c("SITE_ID", "DOMGEOL_BSN", "NLCD2006_ASSIGNEDAREA_BSN", "NLCD2006_DEV
 - PH_RESULT
 
 ``` {r import_waterchem}
-tb_import(c("UID", "NTL_RESULT", "PTL_RESULT", "PH_RESULT"), "./data/nla2012_waterchem_wide.csv") -> waterchem
+tb_import(c("UID", "NTL_RESULT", "PTL_RESULT", "PH_RESULT", "TURB_RESULT"), "./data/nla2012_waterchem_wide.csv") -> waterchem
 ```
 
-## Data Merge and Initial Filter
+#### Phytoplankton Data
 
-The selected data from the imported tables is now combined into a single table that will be used for lake selection. First a left join using the SITE_ID field to append watershed data to general site info. Then a left join is used to append the water chemistry data to each visit using the UID field. 
+- UID
+- SAMPLE_ID
+- VISIT_NO
+- ABUNDANCE
+- ALGAL_GROUP
+- TAXA_ID
 
-This table is then filtered to remove undesired lakes. First, lakes with no sampling data are excluded, followed by lakes that were not randomly selected, and third by visit number, removing duplicate visits.
-
-``` {r lake_data_merge}
-siteinfo %>%
-  dplyr::left_join(watershed, by = "SITE_ID") %>%
-  dplyr::left_join(waterchem, by = "UID") %>%
-  dplyr::filter(SITESAMP == "Y") %>%
-  dplyr::filter(SITETYPE == "PROB") %>%
-  dplyr::filter(VISIT_NO == 1) -> initial_filter_result
+``` {r import_phyto}
+tb_import(c("UID", "SAMPLE_ID", "VISIT_NO", "ABUNDANCE", "ALGAL_GROUP", "TAXA_ID"), "./data/nla2012_wide_phytoplankton_count_02122014.csv") %>%
+  dplyr::filter(ALGAL_GROUP == "DIATOM") %>%
+  dplyr::filter(VISIT_NO == 1) -> phyto_count
 ```
 
-## Lake Selection \
+## Lake Selection 
 
-Here is where the bulk of the lake selection process happens. 
+#### Data Merge and Initial Filter
+
+The selected watershed and water chemistry data from the imported tables is now combined into a single table that will be used for lake selection. First a left join using the SITE_ID field to append watershed data to general site info. Then a left join is used to append the water chemistry data to each visit using the UID field. This table is then filtered to remove undesired lakes. First, lakes with no sampling data are excluded, followed by lakes that were not randomly selected, and third by visit number, removing duplicate visits.
+
+#### Lake Selection
+
+In the same code chunk below is where the bulk of the lake selection process happens. 
 
 List of selection conditions in order:
 
@@ -99,40 +220,62 @@ List of selection conditions in order:
   - The 6.2 NA Ecoregion 2 Code represents the "Western Cordillera" also known as the Northwestern Forested Mountain Region.
 2. STATE = CA, OR, WA, ID, MT
   - The restriction to these 5 states removes areas of Ecoregion 6.2 that are mostly in Colorado and New Mexico.
-3. Possibly more later: Elevation, Size, Land Use
+3. Possible to use more criteria here to narrow selection.
 
 ``` {r lake_selection}
-initial_filter_result %>%
+siteinfo %>%
+  dplyr::left_join(watershed, by = "SITE_ID") %>%
+  dplyr::left_join(waterchem, by = "UID") %>%
+  dplyr::filter(SITESAMP == "Y") %>%
+  dplyr::filter(SITETYPE == "PROB") %>%
+  dplyr::filter(VISIT_NO == 1) %>%
   dplyr::filter(NA_L2CODE == 6.2) %>%
   dplyr::filter(STATE == "CA" | STATE == "OR" | STATE == "WA" | STATE == "ID" | STATE == "MT") -> watershed_filter_result
 ```
 
+#### Phytoplankton Data Selection
+
+The lake selection criteria is applied to the phytoplankton count data using the UID field while also appending phosphorus data. Then two data frames are created; one with rows for each UID and columns for each TAXA_ID (values based on ABUNDANCE), and another that lists the max abundance for each taxa and the corresponding phosphorus values for that abundance value. The first data frame, phyto_rf is set up to conduct both a PCA and Random Forest approach to compare results later on. 
+
+``` {r phyto_process}
+watershed_filter_result %>%
+  dplyr::select("UID", "PTL_RESULT") -> watershed_filter_IDs
+
+phyto_count %>%
+  dplyr::inner_join(watershed_filter_IDs, by = "UID",suffix = c(".x", ".y")) -> phyto_filtered
+
+phyto_filtered %>%
+  dplyr::select("PTL_RESULT", "TAXA_ID", "ABUNDANCE") %>%
+  dplyr::group_by(TAXA_ID) %>%
+  pivot_wider(names_from = TAXA_ID, values_from = ABUNDANCE, values_fn = sum) %>%
+  replace(is.na(.), 0) -> phyto_rf
+
+phyto_filtered %>%
+  select(TAXA_ID, PTL_RESULT, ABUNDANCE) %>%
+  group_by(TAXA_ID) %>%
+  arrange(TAXA_ID, desc(ABUNDANCE)) %>%
+  filter(row_number() == 1) -> phyto_max_abundance
+```
+
 ## Data Summary
 
-These are summary statistics for the variables of interest.
+These are summary statistics for the watershed and water chemistry variables of interest.
 
 ``` {r initial_data_summary}
-tb_summary(watershed_filter_result) %>%
-  knitr::kable(format='simple', align='c')
-```
-
-``` {r scatter_linreg}
-tb_scatter(watershed_filter_result, NLCD2006_FORESTPCT_BSN, PTL_RESULT)
-tb_scatter_linreg(watershed_filter_result, NLCD2006_FORESTPCT_BSN, PTL_RESULT)
-tb_scatter_color(watershed_filter_result, NLCD2006_FORESTPCT_BSN, PTL_RESULT, URBAN)
-```
-``` {r boxplot}
-tb_boxplot_single(watershed_filter_result, PTL_RESULT)
-tb_boxplot_multi(watershed_filter_result, URBAN, PTL_RESULT)
-```
-
-``` {r histogram}
-tb_histogram(watershed_filter_result, PTL_RESULT)
-tb_histogram_panel(watershed_filter_result, PTL_RESULT, URBAN)
+watershed_filter_result %>% 
+  select("UID", "NLCD2006_ASSIGNEDAREA_BSN", "NLCD2006_DEVELOPEDPCT_BSN", "NLCD2006_FORESTPCT_BSN", "NLCD2006_IMPERVAREA_BSN", "PMEAN_BSN", "TMEANPY_BSN", "NTL_RESULT", "PTL_RESULT", "PH_RESULT", "TURB_RESULT") %>%
+  summary() %>%
+  knitr::kable(format='simple', align='c', padding = 3, label = 'WATERSHED', digits = round(3))
 ```
 
 ## PCA
 
-``` {r SVD}
-svd_result <- tb_SVD(watershed_filter_result, c("PTL_RESULT", "NTL_RESULT", "PH_RESULT"))
+``` {r PCA}
+
+```
+
+## Random Forest
+
+``` {r random_forest}
+
 ```

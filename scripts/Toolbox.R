@@ -84,7 +84,9 @@ tb_scatter_color <- function(me_data, me_x, me_y, me_color) {
 
 # test code
 
-# tb_scatter(watershed_filter_result, me_x=ELEVATION, me_y=TMEANPY_BSN)
+# tb_scatter(watershed_filter_result, NLCD2006_FORESTPCT_BSN, PTL_RESULT)
+# tb_scatter_linreg(watershed_filter_result, NLCD2006_FORESTPCT_BSN, PTL_RESULT)
+# tb_scatter_color(watershed_filter_result, NLCD2006_FORESTPCT_BSN, PTL_RESULT, URBAN)
 
 ## Box Plot
 
@@ -103,6 +105,11 @@ tb_boxplot_multi <- function(me_data, me_x, me_y) {
     geom_boxplot()
 }
 
+# test code
+
+# tb_boxplot_single(watershed_filter_result, PTL_RESULT)
+# tb_boxplot_multi(watershed_filter_result, URBAN, PTL_RESULT)
+
 ## Histogram
 
 tb_histogram <- function(me_data, me_x) {
@@ -112,7 +119,6 @@ tb_histogram <- function(me_data, me_x) {
     scale_x_binned()
 }
 
-
 tb_histogram_panel <- function(me_data, me_x, me_y) {
   me_data %>%
     ggplot() +
@@ -120,6 +126,11 @@ tb_histogram_panel <- function(me_data, me_x, me_y) {
     scale_x_binned() +
     facet_wrap(vars({{me_y}}))
 }
+
+# test code
+# 
+# tb_histogram(watershed_filter_result, PTL_RESULT)
+# tb_histogram_panel(watershed_filter_result, PTL_RESULT, URBAN)
 
 ## PCA
 
@@ -143,3 +154,8 @@ test_forest <- randomForest(PTL_RESULT~.,
                             ntree = 100,
                             mtry = 2)
 test_forest  
+
+dplyr::select(phyto_filtered, "TAXA_ID") %>%
+  + group_by(TAXA_ID) %>%
+  + summarise(id = TAXA_ID,
+              count = count(TAXA_ID))
