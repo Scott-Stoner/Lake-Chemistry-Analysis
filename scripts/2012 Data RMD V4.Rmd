@@ -1,0 +1,353 @@
+---
+title: "2012 Data RMD V3"
+author: "Scott Stoner"
+date: '2023'
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(factoextra)
+library(reshape2)
+library(vegan)
+```
+
+``` {r toolbox, include = FALSE}
+### TOOLBOX
+
+# This section contains function definitions that are used to conduct later analysis.
+# Purpose of this section is to make previous versions of this code 'functional'.
+
+## Import Function
+
+#   This function takes arguments: string(a csv file name), a list of strings(column
+# names). It imports the desired file and returns the selected columns in a dataframe.
+
+tb_import <- function(me_columns, me_filename){
+  stopifnot(is.vector(me_columns))
+  stopifnot(is.character(me_filename))
+  
+  read.csv(me_filename) %>%
+  dplyr::select(all_of(me_columns)) %>%
+  invisible()
+}
+
+## Summary Stats
+
+# This function takes a dataframe and returns summary() data for each numeric col.
+
+tb_summary <- function(me_data){
+  me_data %>%
+    select_if(is.numeric) %>%
+    summary() %>%
+    return()
+}
+
+## Scatter Plot
+
+# These functions create scatter plots with specific alterations.
+
+# Basic Scatter Plot
+# takes a dataframe, x, and y column. 
+
+tb_scatter <- function(me_data, me_x, me_y) {
+  ggplot(me_data, aes(x = {{me_x}}, y = {{me_y}})) +
+    geom_point()
+}
+
+# Basic Scatter with Linear Regression line
+
+tb_scatter_linreg <- function(me_data, me_x, me_y) {
+  ggplot(me_data, aes(x = {{me_x}}, y = {{me_y}})) +
+    geom_point() +
+    geom_smooth(method='lm', se=FALSE)
+}
+
+# Scatter Plot with additional input for color column.
+
+tb_scatter_color <- function(me_data, me_x, me_y, me_color) {
+  ggplot(me_data, aes(x = {{me_x}}, y = {{me_y}}, color = {{me_color}})) +
+    geom_point()
+}
+
+## Box Plot
+
+# Creates a box plot for a single column
+
+tb_boxplot_single <- function(me_data, me_x) {
+  ggplot(me_data, aes({{me_x}})) +
+    geom_boxplot()
+}
+
+# creates multiple box plots based on (me_y) data on the y axis,
+# grouped by (me_x) on the x-axis
+
+tb_boxplot_multi <- function(me_data, me_x, me_y) {
+  ggplot(me_data, aes({{me_x}}, {{me_y}})) +
+    geom_boxplot()
+}
+
+## Histogram
+
+tb_histogram <- function(me_data, me_x) {
+  me_data %>%
+  ggplot() +
+    geom_bar(aes({{me_x}})) +
+    scale_x_binned()
+}
+
+tb_histogram_panel <- function(me_data, me_x, me_y) {
+  me_data %>%
+    ggplot() +
+    geom_bar(aes({{me_x}})) +
+    scale_x_binned() +
+    facet_wrap(vars({{me_y}}))
+}
+```
+## Data Import
+
+This section covers importing lake chemistry and watershed data for the purpose of lake selection. The relevant data is first retrieved from one of the NLS 2012 csv files. These variables fall into three categories, watershed information, water chemistry data, and diatom phytoplankton counts. Additional variables are included to help with ID or shed light on connections made during anlaysis. Variable names and notes are included for each imported data set. 
+
+#### Site Info
+
+- AREA_HA (lake area, hectares)
+- STATE
+- SIZE_CLASS
+- SITETYPE (probability or handpicked)
+- ELEVATION
+- FS_EW (forest service land east or west)
+- DSGN12 (incorporated in the NLA2012 design framework)
+- NA_L2CODE (ecoregion level 2)
+- NA_L3CODE (ecoregion level 3)
+- URBAN (determination based on land use)
+- EVAL_NAME (lake name)
+- LAKE_ORIGIN (“manmade or natural”)
+- PERIM_KM (lake perimeter)
+- SITESAMP (was site sampled)
+- DATE_COL (date of sample collection)
+- SITE_ID (id code for site 2012 version)
+- VISIT_NO (visit number for site)
+- UID (unique site visit id)
+
+``` {r import_siteinfo}
+tb_import(c("UID", "SITE_ID", "VISIT_NO", "DATE_COL", "SITETYPE", "SITESAMP", "DSGN12", "EVAL_NAME","STATE", "ELEVATION", "AREA_HA", "PERIM_KM","SIZE_CLASS", "FS_EW","NA_L2CODE", "NA_L3CODE","URBAN", "LAKE_ORIGIN"), "./data/nla2012_wide_siteinfo_08232016.csv") -> siteinfo
+```
+
+#### Watershed Data
+
+- SITE_ID
+- DOMGEOL_BSN (dominant geology)
+- HOUSEDEN_BSN (housing density in basin housing units/sq mi)
+- NLCD2006_ASSIGNEDAREA_BSN (area within basin assigned nlcd value*)
+- NLCD2006_DEVELOPEDPCT_BSN (percent developed)
+- NLCD2006_FORESTPCT_BSN (percent forest)
+- NLCD2006_IMPERVPCT_BSN (percent impervious)
+- NLCD2006_12PCT_BSN (percent perennial ice)
+- NLCD2006_AGRICPCT_BSN (percent cultivated/planted)
+- NLCD2006_WETLANDPCT_BSN (percent wetland)
+- POPDEN_BSN (people/sq mi)
+- PMEAN_BSN (mean annual precipitation in basin)[multiple precip values]
+- TMEANPY_BSN (mean temperature in basin 12 months)[multiple temp values]
+
+``` {r import_watershed}
+tb_import(c("SITE_ID", "DOMGEOL_BSN", "HOUSEDEN_BSN", "NLCD2006_ASSIGNEDAREA_BSN", "NLCD2006_DEVELOPEDPCT_BSN", "NLCD2006_FORESTPCT_BSN", "NLCD2006_IMPERVPCT_BSN", "NLCD2006_12PCT_BSN", "NLCD2006_AGRICPCT_BSN", "NLCD2006_WETLANDPCT_BSN", "POPDEN_BSN", "PMEAN_BSN", "TMEANPY_BSN"), "./data/nla2012_wide_watershed.csv") -> watershed
+```
+
+#### Water Chemistry Data
+
+- UID
+- NTL_RESULT (Total Nitrogen mg/L)
+- PTL_RESULT (Total Phosphorus ug/L)
+- PH_RESULT (Standard logarithmic pH scale)
+- TURB_RESULT (Turbidity, Unspecified Units, non-logarithmic)
+- COND_RESULT (Conductivity, uS/cm @ 25 C)
+- CHLORIDE_RESULT (Chloride mg/L)
+- NITRATE_N_RESULT (Nitrate mg N/L)
+- NITRITE_N_RESULT (Nitrite mg N/L)
+- SULFATE_RESULT (Sulfate mg/L)
+- CALCIUM_RESULT (Calcium mg/L)
+- AMMONIA_N_RESULT (Ammonia mg N/L)
+- DOC_RESULT (Dissolved Organic Carbon mg/L)
+- SODIUM_RESULT (Sodium mg/L)
+- MAGNESIUM_RESULT (Magnesium mg/L)
+- POTASSIUM_RESULT (Potassium mg/L)
+
+``` {r import_waterchem}
+waterchem_cols <- c("UID", "NTL_RESULT", "PTL_RESULT", "PH_RESULT", "TURB_RESULT", "COND_RESULT", "CHLORIDE_RESULT", "NITRATE_N_RESULT", "NITRITE_N_RESULT", "SULFATE_RESULT", "CALCIUM_RESULT", "AMMONIA_N_RESULT", "DOC_RESULT", "SODIUM_RESULT", "MAGNESIUM_RESULT", "POTASSIUM_RESULT")
+tb_import(waterchem_cols, "./data/nla2012_waterchem_wide.csv") -> waterchem
+```
+
+#### Phytoplankton Data
+
+- UID
+- SAMPLE_ID
+- VISIT_NO
+- ABUNDANCE
+- ALGAL_GROUP
+- TAXA_ID
+
+``` {r import_phyto}
+tb_import(c("UID", "SAMPLE_ID", "VISIT_NO", "ABUNDANCE", "ALGAL_GROUP", "TAXA_ID"), "./data/nla2012_wide_phytoplankton_count_02122014.csv") %>%
+  dplyr::filter(ALGAL_GROUP == "DIATOM") %>%
+  dplyr::filter(VISIT_NO == 1) -> phyto_count
+```
+
+## Lake Selection 
+
+#### Data Merge and Initial Filter
+
+The selected watershed and water chemistry data from the imported tables is now combined into a single table that will be used for lake selection. A left join using the SITE_ID field to append watershed data to general site info. Then a left join is used to append the water chemistry data to each visit using the UID field. This table is then filtered to remove undesired lakes. First, lakes with no sampling data are excluded, followed by lakes that were not randomly selected, and third by visit number, removing duplicate visits.
+
+#### Lake Selection
+
+In the same code chunk below is where the bulk of the lake selection process happens. 
+
+List of selection conditions in order:
+
+1. NA_L2CODE = 6.2
+  - The 6.2 NA Ecoregion 2 Code represents the "Western Cordillera" also known as the Northwestern Forested Mountain Region.
+2. STATE = CA, OR, WA, ID, MT
+  - The restriction to these 5 states removes areas of Ecoregion 6.2 that are mostly in Colorado and New Mexico.
+3. Possible to use more criteria here to narrow selection.
+
+``` {r lake_selection}
+siteinfo %>%
+  dplyr::left_join(watershed, by = "SITE_ID") %>%
+  dplyr::left_join(waterchem, by = "UID") %>%
+  dplyr::filter(SITESAMP == "Y") %>%
+  dplyr::filter(SITETYPE == "PROB") %>%
+  dplyr::filter(VISIT_NO == 1) %>%
+  dplyr::filter(NA_L2CODE == 6.2) %>%
+  dplyr::filter(STATE == "CA" | STATE == "OR" | STATE == "WA" | STATE == "ID" | STATE == "MT") -> watershed_filter_result
+```
+
+#### Phytoplankton Data Selection
+
+The lake selection criteria is applied to the phytoplankton count data using the UID field while also appending phosphorus data. Then two data frames are created; one with rows for each UID and columns for each TAXA_ID (values based on ABUNDANCE), and another that lists the max abundance for each taxa and the corresponding phosphorus values for that abundance value. The first data frame, phyto_rf is set up to conduct both a PCA and Random Forest approach to compare results later on. 
+
+``` {r phyto_process}
+watershed_filter_result %>%
+  dplyr::select("UID", "NTL_RESULT", "PTL_RESULT", "PH_RESULT", "TURB_RESULT", "COND_RESULT", "CHLORIDE_RESULT", "NITRATE_N_RESULT", "NITRITE_N_RESULT", "SULFATE_RESULT", "CALCIUM_RESULT", "AMMONIA_N_RESULT", "DOC_RESULT", "SODIUM_RESULT", "MAGNESIUM_RESULT", "POTASSIUM_RESULT") -> watershed_filter_IDs
+
+phyto_count %>%
+  dplyr::inner_join(watershed_filter_IDs, by = "UID",suffix = c(".x", ".y")) -> phyto_filtered
+
+phyto_filtered %>%
+  dplyr::select("UID", "TAXA_ID", "ABUNDANCE") %>%
+  dplyr::group_by(TAXA_ID) %>%
+  pivot_wider(names_from = TAXA_ID, values_from = ABUNDANCE, values_fn = sum, names_glue = "TID_{TAXA_ID}") %>%
+  dplyr::inner_join(watershed_filter_result, by = "UID") %>%
+  dplyr::mutate(lake = as.character(1:80))  -> phyto_metadata
+
+phyto_metadata %>%
+  dplyr::select(-one_of("UID", "NTL_RESULT", "PTL_RESULT", "PH_RESULT", "TURB_RESULT", "COND_RESULT", "CHLORIDE_RESULT", "NITRATE_N_RESULT", "NITRITE_N_RESULT", "SULFATE_RESULT", "CALCIUM_RESULT", "AMMONIA_N_RESULT", "DOC_RESULT", "SODIUM_RESULT", "MAGNESIUM_RESULT", "POTASSIUM_RESULT", "VISIT_NO", "SITE_ID", "DOMGEOL_BSN", "HOUSEDEN_BSN", "NLCD2006_ASSIGNEDAREA_BSN", "NLCD2006_DEVELOPEDPCT_BSN", "NLCD2006_FORESTPCT_BSN", "NLCD2006_IMPERVPCT_BSN", "NLCD2006_12PCT_BSN", "NLCD2006_AGRICPCT_BSN", "NLCD2006_WETLANDPCT_BSN", "POPDEN_BSN", "PMEAN_BSN", "TMEANPY_BSN", "VISIT_NO", "DATE_COL", "SITETYPE", "SITESAMP", "DSGN12", "EVAL_NAME","STATE", "ELEVATION", "AREA_HA", "PERIM_KM","SIZE_CLASS", "FS_EW","NA_L2CODE", "NA_L3CODE","URBAN", "LAKE_ORIGIN", "lake")) %>%
+  sqrt() %>%
+  replace(is.na(.), 0) -> phyto_taxa
+
+```
+
+## Data Summary
+
+``` {r PCA_waterchem}
+set.seed(710)
+watershed_filter_result %>%
+  dplyr::select(all_of(waterchem_cols)) %>%
+  dplyr::select(-one_of("UID", "COND_RESULT", "PH_RESULT")) %>%
+  replace(is.na(.), 0) %>%
+  dplyr::mutate(PTL_RESULT = PTL_RESULT/1000) %>%
+  +1 %>%
+  log() %>%
+  replace(is.na(.), 0) %>%
+  prcomp() -> waterchem_pca
+
+summary(waterchem_pca)
+
+waterchem_pca$x %>%
+  data.frame() %>%
+  dplyr::select(1:2) -> waterchem_pc1_2
+
+watershed_filter_result %>%
+  mutate(PC1 = waterchem_pc1_2$PC1, PC2 = waterchem_pc1_2$PC2) -> waterchem_pca_metadata
+
+waterchem_pca$rotation %>%
+  data.frame() %>%
+  dplyr::select(1:2)
+
+```
+
+``` {r PCA_analysis1}
+
+fviz_pca_ind(waterchem_pca, labels = 2)
+
+fviz_pca_biplot(waterchem_pca, labelsize = 3)
+
+```
+
+``` {r PCA_analysis2}
+
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = STATE)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = ELEVATION)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = AREA_HA)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = PERIM_KM)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = FS_EW)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = NA_L3CODE)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = URBAN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = LAKE_ORIGIN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = DOMGEOL_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = HOUSEDEN_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = NLCD2006_ASSIGNEDAREA_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = NLCD2006_DEVELOPEDPCT_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = NLCD2006_FORESTPCT_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = NLCD2006_IMPERVPCT_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = NLCD2006_12PCT_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = NLCD2006_AGRICPCT_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = NLCD2006_WETLANDPCT_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = POPDEN_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = PMEAN_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = TMEANPY_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+
+waterchem_pca_metadata %>%
+  ggplot(aes(x = PMEAN_BSN, y = PC1, color = NA_L3CODE)) + geom_point()
+
+waterchem_pca_metadata %>%
+  ggplot(aes(x = ELEVATION, y = PC1, color = NA_L3CODE)) + geom_point()
+
+waterchem_pca_metadata %>%
+  ggplot(aes(x = TMEANPY_BSN, y = PC1, color = NA_L3CODE)) + geom_point()
+
+waterchem_pca_metadata %>% dplyr::filter(NA_L3CODE == "6.2.5"| NA_L3CODE == "6.2.7") %>% ggplot(aes(x = ELEVATION, y = PC1, color = URBAN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+```
+
+## NMDS
+
+``` {r NMDS}
+
+set.seed(710)
+phyto_taxa %>%
+metaMDS(k=2,trace=T,autotransform =F) -> phyto_nmds
+
+plot(phyto_nmds)
+
+phyto_nmds$points %>%
+  as_tibble(rownames="lake") %>%
+  dplyr::inner_join(phyto_metadata, by = "lake") -> nmds_result
+
+nmds_result %>%
+  dplyr::select("NTL_RESULT", "PTL_RESULT", "PH_RESULT", "TURB_RESULT", "CHLORIDE_RESULT", 
+                "NITRATE_N_RESULT", "NITRITE_N_RESULT", "SULFATE_RESULT", "CALCIUM_RESULT", 
+                "AMMONIA_N_RESULT", "DOC_RESULT", "SODIUM_RESULT", "MAGNESIUM_RESULT", "POTASSIUM_RESULT") -> nmds_chem
+
+```
+
+``` {r NMDS_analysis}
+envfit(ord = phyto_nmds, nmds_chem, perm = 999, na.rm = TRUE) -> nmds_ordination
+
+nmds_ordination$vectors$r
+
+nmds_ordination$vectors$pvals
+
+```
