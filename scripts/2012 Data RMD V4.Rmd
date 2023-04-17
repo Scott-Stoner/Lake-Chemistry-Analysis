@@ -288,9 +288,7 @@ fviz_pca_biplot(waterchem_pca, labelsize = 3)
 ```
 
 ``` {r PCA_analysis2}
-
 waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = STATE)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
-waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = ELEVATION)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
 waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = AREA_HA)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
 waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = PERIM_KM)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
 waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = FS_EW)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
@@ -309,6 +307,7 @@ waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = NLCD2006_WETLAND
 waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = POPDEN_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
 waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = PMEAN_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
 waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = TMEANPY_BSN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
+waterchem_pca_metadata %>% ggplot(aes(x = PC1, y = PC2, color = ELEVATION)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
 
 waterchem_pca_metadata %>%
   ggplot(aes(x = PMEAN_BSN, y = PC1, color = NA_L3CODE)) + geom_point()
@@ -319,7 +318,6 @@ waterchem_pca_metadata %>%
 waterchem_pca_metadata %>%
   ggplot(aes(x = TMEANPY_BSN, y = PC1, color = NA_L3CODE)) + geom_point()
 
-waterchem_pca_metadata %>% dplyr::filter(NA_L3CODE == "6.2.5"| NA_L3CODE == "6.2.7") %>% ggplot(aes(x = ELEVATION, y = PC1, color = URBAN)) + geom_point() + ylim(-2.5,5) + xlim(-10,5)
 ```
 
 ## NMDS
@@ -343,11 +341,24 @@ nmds_result %>%
 
 ```
 
-``` {r NMDS_analysis}
+``` {r NMDS_analysis1}
 envfit(ord = phyto_nmds, nmds_chem, perm = 999, na.rm = TRUE) -> nmds_ordination
+
+plot(phyto_nmds)
+plot(nmds_ordination)
 
 nmds_ordination$vectors$r
 
 nmds_ordination$vectors$pvals
+
+nmds_scores = as.data.frame(scores(phyto_nmds)$sites)
+phyto_metadata$NMDS1 = nmds_scores$NMDS1
+phyto_metadata$NMDS2 = nmds_scores$NMDS2
+
+```
+
+``` {r NMDS_analysis2}
+phyto_metadata %>%
+  ggplot(aes(x = NMDS1, y = NMDS2, color = NA_L3CODE)) + geom_point() 
 
 ```
