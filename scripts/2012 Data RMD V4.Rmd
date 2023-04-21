@@ -14,6 +14,8 @@ library(ggplot2)
 library(factoextra)
 library(reshape2)
 library(vegan)
+library(ggrepel)
+library(rioja)
 ```
 
 ``` {r toolbox, include = FALSE}
@@ -47,66 +49,6 @@ tb_summary <- function(me_data){
     return()
 }
 
-## Scatter Plot
-
-# These functions create scatter plots with specific alterations.
-
-# Basic Scatter Plot
-# takes a dataframe, x, and y column. 
-
-tb_scatter <- function(me_data, me_x, me_y) {
-  ggplot(me_data, aes(x = {{me_x}}, y = {{me_y}})) +
-    geom_point()
-}
-
-# Basic Scatter with Linear Regression line
-
-tb_scatter_linreg <- function(me_data, me_x, me_y) {
-  ggplot(me_data, aes(x = {{me_x}}, y = {{me_y}})) +
-    geom_point() +
-    geom_smooth(method='lm', se=FALSE)
-}
-
-# Scatter Plot with additional input for color column.
-
-tb_scatter_color <- function(me_data, me_x, me_y, me_color) {
-  ggplot(me_data, aes(x = {{me_x}}, y = {{me_y}}, color = {{me_color}})) +
-    geom_point()
-}
-
-## Box Plot
-
-# Creates a box plot for a single column
-
-tb_boxplot_single <- function(me_data, me_x) {
-  ggplot(me_data, aes({{me_x}})) +
-    geom_boxplot()
-}
-
-# creates multiple box plots based on (me_y) data on the y axis,
-# grouped by (me_x) on the x-axis
-
-tb_boxplot_multi <- function(me_data, me_x, me_y) {
-  ggplot(me_data, aes({{me_x}}, {{me_y}})) +
-    geom_boxplot()
-}
-
-## Histogram
-
-tb_histogram <- function(me_data, me_x) {
-  me_data %>%
-  ggplot() +
-    geom_bar(aes({{me_x}})) +
-    scale_x_binned()
-}
-
-tb_histogram_panel <- function(me_data, me_x, me_y) {
-  me_data %>%
-    ggplot() +
-    geom_bar(aes({{me_x}})) +
-    scale_x_binned() +
-    facet_wrap(vars({{me_y}}))
-}
 ```
 ## Data Import
 
@@ -237,6 +179,11 @@ phyto_count %>%
   dplyr::inner_join(watershed_filter_IDs, by = "UID",suffix = c(".x", ".y")) -> phyto_filtered
 
 phyto_filtered %>%
+  dplyr::select("UID", "TAXA_ID") %>%
+  dplyr::group_by(TAXA_ID) %>%
+  distinct(TAXA_ID) -> phyto_taxa_names
+
+phyto_filtered %>%
   dplyr::select("UID", "TAXA_ID", "ABUNDANCE") %>%
   dplyr::group_by(TAXA_ID) %>%
   pivot_wider(names_from = TAXA_ID, values_from = ABUNDANCE, values_fn = sum, names_glue = "TID_{TAXA_ID}") %>%
@@ -275,15 +222,20 @@ watershed_filter_result %>%
 
 waterchem_pca$rotation %>%
   data.frame() %>%
-  dplyr::select(1:2)
+  dplyr::select(1:2) -> waterchem_pca_loadings
 
 ```
 
 ``` {r PCA_analysis1}
 
-fviz_pca_ind(waterchem_pca, labels = 2)
+waterchem_pca_metadata %>%
+  ggplot(aes(x = PC1, y = PC2)) + geom_point() 
 
-fviz_pca_biplot(waterchem_pca, labelsize = 3)
+waterchem_pc1_2 %>%
+  ggplot(aes(x = PC1, y = PC2)) + 
+  geom_point() + 
+  geom_segment(data = waterchem_pca_loadings, aes(x = 0, y = 0, xend = PC1*5, yend = PC2*5), alpha = 0.4) + 
+  geom_text(data = waterchem_pca_loadings*5, mapping = aes(x = PC1, y = PC2, label = rownames(waterchem_pca_loadings)), size = 3, check_overlap = TRUE)
 
 ```
 
@@ -328,8 +280,6 @@ set.seed(710)
 phyto_taxa %>%
 metaMDS(k=2,trace=T,autotransform =F) -> phyto_nmds
 
-plot(phyto_nmds)
-
 phyto_nmds$points %>%
   as_tibble(rownames="lake") %>%
   dplyr::inner_join(phyto_metadata, by = "lake") -> nmds_result
@@ -344,21 +294,145 @@ nmds_result %>%
 ``` {r NMDS_analysis1}
 envfit(ord = phyto_nmds, nmds_chem, perm = 999, na.rm = TRUE) -> nmds_ordination
 
-plot(phyto_nmds)
-plot(nmds_ordination)
-
 nmds_ordination$vectors$r
 
 nmds_ordination$vectors$pvals
+
+nmds_ordination$vectors$arrows %>%
+  data.frame() -> nmds_loadings
 
 nmds_scores = as.data.frame(scores(phyto_nmds)$sites)
 phyto_metadata$NMDS1 = nmds_scores$NMDS1
 phyto_metadata$NMDS2 = nmds_scores$NMDS2
 
+plot(nmds_scores)
+plot(nmds_ordination)
+
+phyto_metadata %>%
+  ggplot(aes(x = NMDS1, y = NMDS2)) + 
+  geom_point() -> nmds_plot
+
 ```
 
 ``` {r NMDS_analysis2}
 phyto_metadata %>%
-  ggplot(aes(x = NMDS1, y = NMDS2, color = NA_L3CODE)) + geom_point() 
+  ggplot(aes(x = NMDS1, y = NMDS2, size = AMMONIA_N_RESULT)) + 
+  geom_point()
+
+phyto_metadata %>%
+  ggplot(aes(x = NMDS1, y = NMDS2, size = SULFATE_RESULT)) + 
+  geom_point()
+
+phyto_metadata %>%
+  ggplot(aes(x = NMDS1, y = NMDS2, size = POTASSIUM_RESULT)) + 
+  geom_point()
+
+phyto_metadata %>%
+  ggplot(aes(x = NMDS1, y = NMDS2, size = SODIUM_RESULT)) + 
+  geom_point()
+
+phyto_metadata %>%
+  ggplot(aes(x = NMDS1, y = NMDS2, size = MAGNESIUM_RESULT)) + 
+  geom_point()
+```
+
+``` {r species_analysis1}
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4849)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4006)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4046)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4093)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4182)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4183)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4075)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_3995)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4095)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4107)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4072)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4133)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4164)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4019)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4079)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4008)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4168)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_3994)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4060)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4120)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4023)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4181)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4851)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = NMDS1, y = NMDS2, size = TID_4152)) + geom_point()
+
+```
+
+``` {r species_analysis2}
+phyto_metadata %>% ggplot(aes(x = AMMONIA_N_RESULT, y = TID_4183)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = AMMONIA_N_RESULT, y = TID_4182)) + geom_point()
+
+phyto_metadata %>% ggplot(aes(x = PTL_RESULT, y = TID_4183)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = PTL_RESULT, y = TID_4182)) + geom_point()
+
+phyto_metadata %>% ggplot(aes(x = PH_RESULT, y = TID_4006)) + geom_point()
+
+phyto_metadata %>% ggplot(aes(x = MAGNESIUM_RESULT, y = TID_4046)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = MAGNESIUM_RESULT, y = TID_4107)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = MAGNESIUM_RESULT, y = TID_4133)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = MAGNESIUM_RESULT, y = TID_4164)) + geom_point()
+phyto_metadata %>% ggplot(aes(x = MAGNESIUM_RESULT, y = TID_4023)) + geom_point()
+
+phyto_metadata %>% ggplot(aes(x = SULFATE_RESULT, y = TID_4849)) + geom_point()
+
+phyto_metadata %>% ggplot(aes(x = POTASSIUM_RESULT, y = TID_4849)) + geom_point()
+```
+
+``` {r RDA1}
+phyto_metadata %>%
+  dplyr::select("NTL_RESULT", "PTL_RESULT", "PH_RESULT", "TURB_RESULT", "COND_RESULT", "CHLORIDE_RESULT", "NITRATE_N_RESULT", "NITRITE_N_RESULT", "SULFATE_RESULT", "CALCIUM_RESULT", "AMMONIA_N_RESULT", "DOC_RESULT", "SODIUM_RESULT", "MAGNESIUM_RESULT", "POTASSIUM_RESULT") %>%
+  replace(is.na(.), 0) -> rda_chem
+
+phyto_metadata %>%
+  dplyr::select("ELEVATION", "AREA_HA", "PERIM_KM", "HOUSEDEN_BSN", "NLCD2006_ASSIGNEDAREA_BSN", "NLCD2006_DEVELOPEDPCT_BSN", "NLCD2006_FORESTPCT_BSN", "NLCD2006_IMPERVPCT_BSN", "NLCD2006_12PCT_BSN", "NLCD2006_AGRICPCT_BSN", "NLCD2006_WETLANDPCT_BSN", "POPDEN_BSN", "PMEAN_BSN", "TMEANPY_BSN") %>%
+  replace(is.na(.), 0) -> rda_watershed1
+
+rda(rda_chem~., data = rda_watershed1, scale = TRUE) -> rda_result1
+
+plot(rda_result1)
+
+round(vif.cca(rda_result1),2) 
+
+step(rda_result1) -> rda_step
+
+round(vif.cca(rda_step),2)
+```
+
+``` {r RDA2}
+
+phyto_metadata %>%
+  dplyr::select("ELEVATION", "NLCD2006_FORESTPCT_BSN", "NLCD2006_AGRICPCT_BSN", "NLCD2006_WETLANDPCT_BSN", "POPDEN_BSN", "PMEAN_BSN") %>%
+  replace(is.na(.), 0) -> rda_watershed2
+
+rda(rda_chem~., data = rda_watershed2, scale = TRUE) -> rda_result2
+
+plot(rda_result2)
+```
+
+``` {r WA1}
+WA(phyto_taxa, rda_chem$AMMONIA_N_RESULT) -> wa_result
+
+print(wa_result)
+
+wa_result$coefficients %>%
+  as_tibble(rownames = "TID") %>%
+  arrange(Optima) %>%
+  mutate(rank = row_number()) -> wa_optima
+
+wa_optima %>%
+  ggplot(aes(x = rank, y = Optima)) +
+  geom_segment(aes(x = rank, xend = rank, y = 0, yend = Optima)) +
+  geom_point(size = 4) +
+  coord_flip() +
+  scale_x_continuous(
+    breaks = wa_optima$rank,
+    labels = wa_optima$TID) +
+  labs(y = "Ammonia Optima", x = "Diatom Taxa")
 
 ```
