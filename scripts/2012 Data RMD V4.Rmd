@@ -418,21 +418,93 @@ plot(rda_result2)
 ``` {r WA1}
 WA(phyto_taxa, rda_chem$AMMONIA_N_RESULT) -> wa_result
 
-print(wa_result)
-
 wa_result$coefficients %>%
   as_tibble(rownames = "TID") %>%
-  arrange(Optima) %>%
-  mutate(rank = row_number()) -> wa_optima
+  rename(Ammonia = Optima) -> wa_optima
 
+```
+
+``` {r WA2}
+WA(phyto_taxa, rda_chem$CALCIUM_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(Calcium = Optima) -> wa_temp_optima
+wa_optima$Calcium = wa_temp_optima$Calcium
+
+WA(phyto_taxa, rda_chem$CHLORIDE_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(Chloride = Optima) -> wa_temp_optima
+wa_optima$Chloride = wa_temp_optima$Chloride
+
+WA(phyto_taxa, rda_chem$DOC_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(DOC = Optima) -> wa_temp_optima
+wa_optima$DOC = wa_temp_optima$DOC
+
+WA(phyto_taxa, rda_chem$MAGNESIUM_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(Magnesium = Optima) -> wa_temp_optima
+wa_optima$Magnesium = wa_temp_optima$Magnesium
+
+WA(phyto_taxa, rda_chem$NITRATE_N_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(Nitrate = Optima) -> wa_temp_optima
+wa_optima$Nitrate = wa_temp_optima$Nitrate
+
+WA(phyto_taxa, rda_chem$NITRITE_N_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(Nitrite = Optima) -> wa_temp_optima
+wa_optima$Nitrite = wa_temp_optima$Nitrite
+
+WA(phyto_taxa, rda_chem$NTL_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(Nitrate = Optima) -> wa_temp_optima
+wa_optima$Nitrate = wa_temp_optima$Nitrate
+
+WA(phyto_taxa, rda_chem$PH_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(pH = Optima) -> wa_temp_optima
+wa_optima$pH = wa_temp_optima$pH
+
+WA(phyto_taxa, rda_chem$POTASSIUM_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(Potassium = Optima) -> wa_temp_optima
+wa_optima$Potassium = wa_temp_optima$Potassium
+
+WA(phyto_taxa, rda_chem$PTL_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(Phosphorus = Optima) -> wa_temp_optima
+wa_optima$Phosphorus = wa_temp_optima$Phosphorus
+
+WA(phyto_taxa, rda_chem$SODIUM_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(Sodium = Optima) -> wa_temp_optima
+wa_optima$Sodium = wa_temp_optima$Sodium
+
+WA(phyto_taxa, rda_chem$SULFATE_RESULT) -> wa_result
+wa_result$coefficients %>%
+  as_tibble() %>%
+  rename(Sulfate = Optima) -> wa_temp_optima
+wa_optima$Sulfate = wa_temp_optima$Sulfate
+
+```
+
+``` {r WA3}
 wa_optima %>%
-  ggplot(aes(x = rank, y = Optima)) +
-  geom_segment(aes(x = rank, xend = rank, y = 0, yend = Optima)) +
+  ggplot(aes(x = TID, y = Ammonia)) +
+  geom_segment(aes(x = TID, xend = TID, y = 0, yend = Ammonia)) +
   geom_point(size = 4) +
   coord_flip() +
-  scale_x_continuous(
-    breaks = wa_optima$rank,
-    labels = wa_optima$TID) +
   labs(y = "Ammonia Optima", x = "Diatom Taxa")
 
 ```
